@@ -41,32 +41,45 @@ Keep the analysis clear, accurate, and concise.
 Do not invent skills or qualifications that are not present in the resume.
 """
 
-    for attempt in range(2):
+    models = [
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite"
+]    
 
-        try:
-            response = client.models.generate_content(
-                model="gemini-3.8-flash",
-                contents=prompt
-            )
+    last_error = None
 
-            if not response.text:
-                raise ValueError("Gemini returned an empty response.")
+    for model in models:
+        for attempt in range(2):
+            try:
+                print(f"Trying model: {model}")
 
-            return response.text
+                response = client.models.generate_content(
+                    model=model,
+                    contents=prompt
+                )
 
-        except Exception as e:
+                if not response.text:
+                    raise ValueError("Gemini returned an empty response.")
 
-            error_message = str(e)
+                print(f"Analysis successful using {model}")
+                return response.text
 
-            if "503" in error_message or "UNAVAILABLE" in error_message:
+            except Exception as e:
+                last_error = e
+                error_message = str(e)
 
-                if attempt == 0:
-                    print(
-                        "Gemini temporarily unavailable. "
-                        "Retrying in 3 seconds..."
-                    )
+                if "503" in error_message or "UNAVAILABLE" in error_message:
+                    print(f"{model} temporarily unavailable.")
 
-                    time.sleep(3)
-                    continue
+                    if attempt == 0:
+                        time.sleep(3)
+                        continue
 
-            raise e
+                    break
+
+                raise
+
+    raise RuntimeError(
+        f"All Gemini models are temporarily unavailable: {last_error}"
+    )
+
