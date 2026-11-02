@@ -3,20 +3,17 @@ import os
 import time
 from dotenv import load_dotenv
 from google import genai
+from groq import Groq
 
 load_dotenv()
 
-API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-if not API_KEY:
-    raise ValueError("GEMINI_API_KEY is missing. Check your .env file.")
+gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
+groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
-client = genai.Client(api_key=API_KEY)
-
-
-def analyze_resume(resume_text, job_description):
-
-    prompt = f"""
+PROMPT_TEMPLATE = """
 You are an AI Resume and Job Description Analyzer.
 
 Analyze the following resume and job description.
@@ -41,49 +38,57 @@ Keep the analysis clear, accurate, and concise.
 Do not invent skills or qualifications that are not present in the resume.
 """
 
-    models = [
-        "gemini-3.8-flash",
-        "gemini-3.7-flash"
-    ]
 
-    last_error = None
+def analyze_resume(resume_text, job_description):
+    prompt = PROMPT_TEMPLATE.format(
+        resume_text=resume_text,
+        job_description=job_description
+    )
 
-    for model in models:
-        for attempt in range(2):
+    # Try Gemini first
+    if gemini_client:
+        try:
+            print("Trying Gemini...")
 
-            try:
-                print(f"Trying model: {model}")
+            response = gemini_client.models.generate_content(
+                model="gemini-3.8-flash",
+                contents=prompt
+            )
 
-                response = client.models.generate_content(
-                    model=model,
-                    contents=prompt
-                )
-
-                if not response.text:
-                    raise ValueError("Gemini returned an empty response.")
-
-                print(f"Analysis successful using {model}")
+            if response.text:
+                print("Gemini analysis successful!")
                 return response.text
 
-            except Exception as e:
-                last_error = e
-                error_message = str(e)
+            raise ValueError("Gemini returned an empty response.")
 
-                if "503" in error_message or "UNAVAILABLE" in error_message:
-                    print(f"{model} temporarily unavailable.")
+        except Exception as e:
+            print(f"Gemini failed: {e}")
+            print("Trying Groq as backup...")
 
-                    if attempt == 0:
-                        time.sleep(3)
-                        continue
+    # Use Groq if Gemini fails
+    if groq_client:
+        try:
+            print("Trying Groq...")
 
-                    break
+            completion = groq_client.chat.completions.create(
+                model="openai/gpt-oss-20b",
+                messages=[
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.2
+            )
 
-                if "404" in error_message or "NOT_FOUND" in error_message:
-                    print(f"{model} is unavailable. Trying next model.")
-                    break
+            result = completion.choices[0].message.content
 
-                raise
+            if result:
+                print("Groq analysis successful!")
+                return result
+
+            raise ValueError("Groq returned an empty response.")
+
+        except Exception as e:
+            raise RuntimeError(f"Groq backup also failed: {e}")
 
     raise RuntimeError(
-        f"All Gemini models failed. Last error: {last_error}"
+        "No AI provider is configured. Check GEMINI_API_KEY and GROQ_API_KEY."
     )
