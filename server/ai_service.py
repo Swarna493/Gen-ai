@@ -42,14 +42,15 @@ Do not invent skills or qualifications that are not present in the resume.
 """
 
     models = [
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite"
-]    
+        "gemini-3.8-flash",
+        "gemini-3.7-flash"
+    ]
 
     last_error = None
 
     for model in models:
         for attempt in range(2):
+
             try:
                 print(f"Trying model: {model}")
 
@@ -77,9 +78,12 @@ Do not invent skills or qualifications that are not present in the resume.
 
                     break
 
+                if "404" in error_message or "NOT_FOUND" in error_message:
+                    print(f"{model} is unavailable. Trying next model.")
+                    break
+
                 raise
 
     raise RuntimeError(
-        f"All Gemini models are temporarily unavailable: {last_error}"
+        f"All Gemini models failed. Last error: {last_error}"
     )
-
