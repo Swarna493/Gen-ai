@@ -1,5 +1,6 @@
 
 import os
+import traceback
 from dotenv import load_dotenv
 from google import genai
 from groq import Groq
@@ -59,7 +60,7 @@ def analyze_resume(resume_text, job_description):
         job_description=job_description
     )
 
-    # 1. Try Gemini first with a short timeout
+    # Try Gemini first
     if gemini_client:
         try:
             print("Trying Gemini...")
@@ -73,15 +74,10 @@ def analyze_resume(resume_text, job_description):
                 print("Gemini analysis successful!")
                 return response.text
 
-            print("Gemini returned an empty response.")
-
         except Exception as e:
-    import traceback
-    print("GROQ ERROR TYPE:", type(e).__name__)
-    print("GROQ ERROR DETAILS:", repr(e))
-    traceback.print_exc()
+            print("Gemini failed:", type(e).__name__, repr(e))
 
-    # 2. Try Groq immediately if Gemini fails
+    # Try Groq backup
     if groq_client:
         try:
             print("Trying Groq backup...")
@@ -103,11 +99,14 @@ def analyze_resume(resume_text, job_description):
             raise ValueError("Groq returned an empty response.")
 
         except Exception as e:
-            print(f"Groq failed: {type(e).__name__}: {e}")
+            print("GROQ ERROR TYPE:", type(e).__name__)
+            print("GROQ ERROR DETAILS:", repr(e))
+            traceback.print_exc()
+
             raise RuntimeError(
                 "Both Gemini and Groq failed. Please try again later."
             ) from e
 
     raise RuntimeError(
-        "No AI provider configured. Check your environment variables."
+        "No AI provider configured. Check environment variables."
     )
