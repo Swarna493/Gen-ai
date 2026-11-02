@@ -1,6 +1,5 @@
 
 import os
-import time
 from dotenv import load_dotenv
 from google import genai
 from groq import Groq
@@ -10,8 +9,22 @@ load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
-groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+gemini_client = (
+    genai.Client(
+        api_key=GEMINI_API_KEY,
+        http_options={"timeout": 10000}
+    )
+    if GEMINI_API_KEY else None
+)
+
+groq_client = (
+    Groq(
+        api_key=GROQ_API_KEY,
+        timeout=20.0,
+        max_retries=0
+    )
+    if GROQ_API_KEY else None
+)
 
 PROMPT_TEMPLATE = """
 You are an AI Resume and Job Description Analyzer.
@@ -40,12 +53,13 @@ Do not invent skills or qualifications that are not present in the resume.
 
 
 def analyze_resume(resume_text, job_description):
+
     prompt = PROMPT_TEMPLATE.format(
         resume_text=resume_text,
         job_description=job_description
     )
 
-    # Try Gemini first
+    # 1. Try Gemini first with a short timeout
     if gemini_client:
         try:
             print("Trying Gemini...")
@@ -59,16 +73,15 @@ def analyze_resume(resume_text, job_description):
                 print("Gemini analysis successful!")
                 return response.text
 
-            raise ValueError("Gemini returned an empty response.")
+            print("Gemini returned an empty response.")
 
         except Exception as e:
-            print(f"Gemini failed: {e}")
-            print("Trying Groq as backup...")
+            print(f"Gemini failed: {type(e).__name__}: {e}")
 
-    # Use Groq if Gemini fails
+    # 2. Try Groq immediately if Gemini fails
     if groq_client:
         try:
-            print("Trying Groq...")
+            print("Trying Groq backup...")
 
             completion = groq_client.chat.completions.create(
                 model="openai/gpt-oss-20b",
@@ -87,8 +100,11 @@ def analyze_resume(resume_text, job_description):
             raise ValueError("Groq returned an empty response.")
 
         except Exception as e:
-            raise RuntimeError(f"Groq backup also failed: {e}")
+            print(f"Groq failed: {type(e).__name__}: {e}")
+            raise RuntimeError(
+                "Both Gemini and Groq failed. Please try again later."
+            ) from e
 
     raise RuntimeError(
-        "No AI provider is configured. Check GEMINI_API_KEY and GROQ_API_KEY."
+        "No AI provider configured. Check your environment variables."
     )
