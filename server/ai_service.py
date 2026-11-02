@@ -76,7 +76,10 @@ def analyze_resume(resume_text, job_description):
             print("Gemini returned an empty response.")
 
         except Exception as e:
-            print(f"Gemini failed: {type(e).__name__}: {e}")
+    import traceback
+    print("GROQ ERROR TYPE:", type(e).__name__)
+    print("GROQ ERROR DETAILS:", repr(e))
+    traceback.print_exc()
 
     # 2. Try Groq immediately if Gemini fails
     if groq_client:
